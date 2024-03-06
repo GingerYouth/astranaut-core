@@ -1,76 +1,86 @@
 package org.cqfn.astranaut.core.database.janusgraph;
 
-import org.cqfn.astranaut.core.*;
+
+import org.cqfn.astranaut.core.CommonFragment;
+import org.cqfn.astranaut.core.Factory;
+import org.cqfn.astranaut.core.Fragment;
+import org.cqfn.astranaut.core.Node;
+import org.cqfn.astranaut.core.Position;
+import org.cqfn.astranaut.core.Type;
 import org.cqfn.astranaut.core.database.DbNode;
 
 import java.util.*;
 
+@SuppressWarnings({
+    "PMD.OnlyOneConstructorShouldDoInitialization", "PMD.ConstructorShouldDoInitialization",
+    "PMD.ConstructorOnlyInitializesOrCallOtherConstructors"
+})
 public class JGNode implements DbNode {
     final Map<PName, Object> properties = new HashMap<>();
 
     final List<JGNode> children = new ArrayList<>();
 
-    private Factory factory = null;
+    private Factory factory;
 
     public enum PName {
         ROOT, BEGIN, END, SOURCE, TYPE, DATA, CHILD_COUNT, INDEX, UUID
     }
 
-    public JGNode(Node node, boolean root) {
-        Position begin = node.getFragment().getBegin();
-        Position end = node.getFragment().getEnd();
+    public JGNode(final Node node, final boolean root) {
+        final Position begin = node.getFragment().getBegin();
+        final Position end = node.getFragment().getEnd();
         if (root) {
-            properties.put(PName.ROOT, true);
+            this.properties.put(PName.ROOT, true);
         }
-        properties.put(PName.BEGIN, String.valueOf(begin.getIndex()));
-        properties.put(PName.END, String.valueOf(end.getIndex()));
-        properties.put(PName.SOURCE, node.getFragment().getSource().getFragmentAsString(begin, end));
-        properties.put(PName.DATA, node.getData());
-        properties.put(PName.TYPE, node.getType().getName());
-        properties.put(PName.CHILD_COUNT, String.valueOf(node.getChildCount()));
-        properties.put(PName.UUID, UUID.randomUUID().toString()); // TODO:: think about collisions
+        this.properties.put(PName.BEGIN, String.valueOf(begin.getIndex()));
+        this.properties.put(PName.END, String.valueOf(end.getIndex()));
+        this.properties.put(PName.SOURCE, node.getFragment().getSource().getFragmentAsString(begin, end));
+        this.properties.put(PName.DATA, node.getData());
+        this.properties.put(PName.TYPE, node.getType().getName());
+        this.properties.put(PName.CHILD_COUNT, String.valueOf(node.getChildCount()));
+        this.properties.put(PName.UUID, UUID.randomUUID().toString()); // TODO:: think about collisions
         for (final Node child: node.getChildrenList()) {
-            children.add(new JGNode(child, false));
+            this.children.add(new JGNode(child, false));
         }
     }
 
-    public JGNode(Map<PName, Object> vertexProperties, Factory factory) {
-        properties.putAll(vertexProperties);
+    public JGNode(final Map<PName, Object> vertexProperties, final Factory factory) {
+        this.properties.putAll(vertexProperties);
         this.factory = factory;
     }
 
     @Override
     public Fragment getFragment() {
         return new CommonFragment(
-            (String) properties.get(PName.SOURCE),
-            Integer.parseInt((String) properties.get(PName.BEGIN)),
-            Integer.parseInt((String) properties.get(PName.BEGIN))
+            (String) this.properties.get(PName.SOURCE),
+            Integer.parseInt((String) this.properties.get(PName.BEGIN)),
+            Integer.parseInt((String) this.properties.get(PName.BEGIN))
         );
     }
 
     @Override
     public Type getType() {
-        return factory.getType((String) properties.get(PName.TYPE));
+        return this.factory.getType((String) this.properties.get(PName.TYPE));
     }
 
     @Override
     public String getTypeName() {
-        return getType().getName();
+        return this.getType().getName();
     }
 
     @Override
     public String getData() {
-        return (String) properties.get(PName.DATA);
+        return (String) this.properties.get(PName.DATA);
     }
 
     @Override
     public int getChildCount() {
-        return Integer.parseInt((String) properties.get(PName.CHILD_COUNT));
+        return Integer.parseInt((String) this.properties.get(PName.CHILD_COUNT));
     }
 
     @Override
-    public Node getChild(int index) {
-        return children.get(index);
+    public Node getChild(final int index) {
+        return this.children.get(index);
     }
 
 }

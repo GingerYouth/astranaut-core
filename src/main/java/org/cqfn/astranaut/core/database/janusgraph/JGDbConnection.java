@@ -20,29 +20,53 @@ import java.util.*;
 
 import static org.apache.tinkerpop.gremlin.process.traversal.AnonymousTraversalSource.traversal;
 
+/**
+ * Janusgraph DB connection implementation.
+ *
+ * @since 1.1.0
+ */
+@SuppressWarnings({
+    "PMD.ConstructorOnlyInitializesOrCallOtherConstructors"
+})
 public class JGDbConnection implements DbConnection<JGNode, Vertex> {
-
+    /**
+     * The cluster.
+     */
     private Cluster cluster;
 
+    /**
+     * The graphtraversal.
+     */
     private GraphTraversalSource g;
 
-    public static void main(String[] args) {
-        new JGDbConnection("172.28.162.16", 8182);
+    /**
+     * Constructor.
+     *
+     * @param ip IP to connect
+     * @param port Port to connect
+     */
+    public JGDbConnection(final String ip, final int port) {
+        this.connect(ip, port);
     }
 
-    public JGDbConnection(String ip, int port) {
-        connect(ip, port);
-    }
-
+    /**
+     * Get graph traversal source.
+     *
+     * @return {@link GraphTraversalSource}
+     */
     public GraphTraversalSource getG() {
         return g;
     }
 
-    public void connect(String ip, int port) {
-        cluster = connectToJGDatabase(ip, port);
-        System.out.println("Using cluster connection: " + cluster);
+    /**
+     * Connect to the DB.
+     *
+     * @param ip IP to connect
+     * @param port Port to connect
+     */
+    public void connect(final String ip, final int port) {
+        cluster = connectToJgDatabase(ip, port);
         g = getGraphTraversalSource(cluster);
-        System.out.println("Using traversal source: " + g.toString());
     }
 
     @Override
@@ -55,83 +79,103 @@ public class JGDbConnection implements DbConnection<JGNode, Vertex> {
         cluster.close();
     }
 
+    /**
+     * Add root node to the database.
+     *
+     * @param node The node to add
+     * @return Added {@link Vertex} - converted node
+     */
     @Override
-    public Vertex addVertex(JGNode node) {
-        GraphTraversal<Vertex, Vertex> thisVertexGT = g.addV();
-        for (Map.Entry<JGNode.PName, Object> entry: node.properties.entrySet()) {
+    public Vertex addVertex(final JGNode node) {
+        final GraphTraversal<Vertex, Vertex> thisVertexGT = g.addV();
+        for (final Map.Entry<JGNode.PName, Object> entry: node.properties.entrySet()) {
             thisVertexGT.property(entry.getKey().toString(), entry.getValue());
         }
-        Vertex thisVertex = thisVertexGT.next();
+        final Vertex thisVertex = thisVertexGT.next();
         for (int i = 0; i < node.children.size(); i++) {
-            GraphTraversal<Vertex, Edge> edgeGT = g.V(thisVertex).addE("ast");
-            Vertex childVertex = addVertex(node.children.get(i), i);
+            final GraphTraversal<Vertex, Edge> edgeGT = g.V(thisVertex).addE("ast");
+            final Vertex childVertex = addVertex(node.children.get(i), i);
             edgeGT.to(childVertex).next();
         }
         return Objects.requireNonNull(thisVertex);
     }
 
-    public Vertex addVertex(JGNode node, int index) {
-        GraphTraversal<Vertex, Vertex> thisVertexGT = g.addV();
-        for (Map.Entry<JGNode.PName, Object> entry: node.properties.entrySet()) {
+    /**
+     * Add child node to the database with the specified index.
+     *
+     * @param node The node to add
+     * @param index The node's index among children
+     * @return Added {@link Vertex} - converted node
+     */
+    public Vertex addVertex(final JGNode node, final int index) {
+        final GraphTraversal<Vertex, Vertex> thisVertexGT = g.addV();
+        for (final Map.Entry<JGNode.PName, Object> entry: node.properties.entrySet()) {
             thisVertexGT.property(entry.getKey().toString(), entry.getValue());
         }
         thisVertexGT.property("INDEX", index);
-        Vertex thisVertex = thisVertexGT.next();
-        for (JGNode child: node.children) {
-            GraphTraversal<Vertex, Edge> edgeGT = g.V(thisVertex).addE("ast");
-            Vertex childVertex = addVertex(child);
+        final Vertex thisVertex = thisVertexGT.next();
+        for (int i = 0; i < node.children.size(); i++) {
+            final GraphTraversal<Vertex, Edge> edgeGT = g.V(thisVertex).addE("ast");
+            final Vertex childVertex = addVertex(node.children.get(i), i);
             edgeGT.to(childVertex).next();
         }
         return Objects.requireNonNull(thisVertex);
     }
 
     @Override
-    public Node getNode(Vertex vertex, Factory factory) {
-        List<Vertex> childrenVertices = this.getG().V(vertex.id()).outE().inV().toList();
-        Vector<Node> childrenVector = new Vector<>();
+    public Node getNode(final Vertex vertex, final Factory factory) {
+        final List<Vertex> childrenVertices = this.getG().V(vertex.id()).outE().inV().toList();
+        final Vector<Node> childrenVector = new Vector<>();
         childrenVector.setSize(childrenVertices.size());
-        for (Vertex childVertex: childrenVertices) {
-            Node child = getNode(childVertex, factory);
+        for (final Vertex childVertex: childrenVertices) {
+            final Node child = getNode(childVertex, factory);
             if (childVertex.property("INDEX") instanceof EmptyVertexProperty) {
                 childrenVector.add(child);
             } else {
                 childrenVector.add((Integer) childVertex.property("INDEX").value(), child);
             }
         }
-
         final Map<JGNode.PName, Object> properties = new HashMap<>();
-        Iterator<VertexProperty<Object>> vpIterator = vertex.properties();
+        final Iterator<VertexProperty<Object>> vpIterator = vertex.properties();
         while (vpIterator.hasNext()) {
-            VertexProperty<Object> vertexProperty = vpIterator.next();
+            final VertexProperty<Object> vertexProperty = vpIterator.next();
             properties.put(JGNode.PName.valueOf(vertexProperty.label()), vertexProperty.value());
         }
-
-        JGNode node = new JGNode(properties, factory);
-
-        Builder builder = factory.createBuilder((String) vertex.property("TYPE").value());
+        final JGNode node = new JGNode(properties, factory);
+        final Builder builder = factory.createBuilder((String) vertex.property("TYPE").value());
         builder.setFragment(node.getFragment());
         builder.setData(node.getData());
         childrenVector.removeIf(Objects::isNull);
-
         //TODO:: this fails because of actions. need to process them separately
         builder.setChildrenList(childrenVector);
-
         return builder.createNode();
     }
 
-    private static Cluster connectToJGDatabase(String ip, int port) {
-        TypeSerializerRegistry typeSerializerRegistry = TypeSerializerRegistry.build()
+    /**
+     * Connect to the Janusgraph DB.
+     *
+     * @param ipaddress IP to connect
+     * @param port Port to connect
+     * @return Connection {@link Cluster}
+     */
+    private static Cluster connectToJgDatabase(final String ipaddress, final int port) {
+        final TypeSerializerRegistry serializer = TypeSerializerRegistry.build()
             .addRegistry(JanusGraphIoRegistry.instance())
             .create();
-
-        Cluster.Builder builder = Cluster.build();
-        builder.addContactPoint(ip);
+        final Cluster.Builder builder = Cluster.build();
+        builder.addContactPoint(ipaddress);
         builder.port(port);
-        builder.serializer(new GraphBinaryMessageSerializerV1(typeSerializerRegistry));
+        builder.serializer(new GraphBinaryMessageSerializerV1(serializer));
         return builder.create();
     }
 
-    private static GraphTraversalSource getGraphTraversalSource(Cluster cluster) {
+    /**
+     * Get {@link GraphTraversalSource} using specified {@link Cluster}.
+     *
+     * @param cluster The cluster to get traversal source
+     * @return Graph traversal source {@link GraphTraversalSource}
+     */
+    private static GraphTraversalSource getGraphTraversalSource(final Cluster cluster) {
         return traversal().withRemote(DriverRemoteConnection.using(cluster));
     }
 }

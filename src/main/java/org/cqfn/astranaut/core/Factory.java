@@ -52,7 +52,7 @@ public class Factory {
     public final Builder createBuilder(final String name) {
         final Builder result;
         if (this.types.containsKey(name)) {
-            result = getType(name).createBuilder();
+            result = this.getType(name).createBuilder();
         } else {
             if (name.equals("Delete")) {
                 result = new Delete.Constructor();
@@ -67,10 +67,10 @@ public class Factory {
 
     /**
      * Creates type by its name.
-     * @param typeName The name of the type
+     * @param name The name of the type
      * @return Type
      */
-    public final Type getType(final String typeName) {
-        return this.types.get(typeName);
+    public final Type getType(final String name) {
+        return this.types.get(name);
     }
 }
